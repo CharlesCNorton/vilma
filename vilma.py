@@ -30,7 +30,7 @@ class ViLMA:
         blank_window_open (bool): Flag to check if the blank window is open.
         logout_on_trigger (bool): Flag to check if the system should log out on 'YES' inference.
         dummy_mode (bool): Flag to check if the system is in dummy mode.
-        full_output_mode (bool): Flag to check if the system should allow full model output.
+        blank_screen_on_trigger (bool): Flag to check if the blank screen should be shown on 'YES' inference.
         inference_rate (int or None): The number of inferences per second. Default is None.
     """
 
@@ -45,7 +45,7 @@ class ViLMA:
         self.blank_window_open = False
         self.logout_on_trigger = False
         self.dummy_mode = False
-        self.full_output_mode = False
+        self.blank_screen_on_trigger = False
         self.inference_rate = None
 
         atexit.register(self.ensure_blank_window_closed)
@@ -136,7 +136,7 @@ class ViLMA:
             bool: The result of the inference (True for 'yes', False for 'no').
         """
         try:
-            task_prompt = "<CAPTION_TO_EXPRESSION_COMPREHENSION>" if not self.full_output_mode else prompt
+            task_prompt = prompt
             inputs = self.prepare_inputs(task_prompt, image)
             generated_ids = self.run_model(inputs)
             generated_text = self.process_outputs(generated_ids)
@@ -205,10 +205,10 @@ class ViLMA:
         try:
             system_platform = platform.system()
             if system_platform == "Windows":
-                # Command to log out on Windows
+
                 subprocess.run(["shutdown", "/l"], check=True)
             elif system_platform == "Linux" or system_platform == "Darwin":
-                # Command to log out on Unix-based systems (Linux/macOS)
+
                 subprocess.run(["pkill", "-KILL", "-u", os.getlogin()], check=True)
             else:
                 print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Unsupported operating system: {system_platform}")
@@ -237,7 +237,7 @@ class ViLMA:
                             print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Trigger detected, logging out")
                             self.logout()
                             break
-                        if not self.blank_window_open:
+                        if self.blank_screen_on_trigger and not self.blank_window_open:
                             print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Trigger detected, opening blank window")
                             self.show_blank_window()
                 else:
@@ -263,21 +263,21 @@ class ViLMA:
         """
         print(Fore.CYAN + "\n=== Welcome to ViLMA (Vision-Language Model-based Active Monitoring) ===" + Style.RESET_ALL)
         while True:
-            print(Fore.CYAN + "\n=== ViLMA Terminal Menu ===" + Style.RESET_ALL)
-            print(Fore.YELLOW + "Model Operations:" + Style.RESET_ALL)
-            print(Fore.YELLOW + "1. Load Florence-2" + Style.RESET_ALL)
-            print(Fore.YELLOW + "Monitoring Settings:" + Style.RESET_ALL)
-            print(Fore.YELLOW + "2. Add Inference Prompt" + Style.RESET_ALL)
-            print(Fore.YELLOW + "3. Remove Inference Prompt" + Style.RESET_ALL)
-            print(Fore.YELLOW + "4. List Inference Prompts" + Style.RESET_ALL)
-            print(Fore.YELLOW + "5. Set Inference Rate (current: " + (Fore.GREEN + str(self.inference_rate) if self.inference_rate else Fore.RED + "None") + Style.RESET_ALL + ")" + Style.RESET_ALL)
-            print(Fore.YELLOW + "Monitoring Control:" + Style.RESET_ALL)
-            print(Fore.YELLOW + "6. Start Screen Monitoring" + Style.RESET_ALL)
-            print(Fore.YELLOW + "7. Toggle Logout on Trigger (current: " + (Fore.GREEN + "ON" if self.logout_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
-            print(Fore.YELLOW + "8. Toggle Dummy Mode (current: " + (Fore.GREEN + "ON" if self.dummy_mode else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
-            print(Fore.YELLOW + "9. Toggle Full Output Mode (current: " + (Fore.GREEN + "ON" if self.full_output_mode else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.CYAN + "\n=== Menu ===" + Style.RESET_ALL)
+            print(Fore.MAGENTA + "Model Operations:" + Style.RESET_ALL)
+            print(Fore.LIGHTMAGENTA_EX + "1. Load Florence-2" + Style.RESET_ALL)
+            print(Fore.BLUE + "Monitoring Settings:" + Style.RESET_ALL)
+            print(Fore.LIGHTBLUE_EX + "2. Add Inference Prompt" + Style.RESET_ALL)
+            print(Fore.LIGHTBLUE_EX + "3. Remove Inference Prompt" + Style.RESET_ALL)
+            print(Fore.LIGHTBLUE_EX + "4. List Inference Prompts" + Style.RESET_ALL)
+            print(Fore.LIGHTBLUE_EX + "5. Set Inference Rate (current: " + (Fore.GREEN + str(self.inference_rate) if self.inference_rate else Fore.RED + "None") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.GREEN + "Monitoring Control:" + Style.RESET_ALL)
+            print(Fore.LIGHTGREEN_EX + "6. Start Screen Monitoring" + Style.RESET_ALL)
+            print(Fore.LIGHTGREEN_EX + "7. Toggle Logout on Trigger (current: " + (Fore.GREEN + "ON" if self.logout_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.LIGHTGREEN_EX + "8. Toggle Dummy Mode (current: " + (Fore.GREEN + "ON" if self.dummy_mode else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.LIGHTGREEN_EX + "9. Toggle Blank Screen on Trigger (current: " + (Fore.GREEN + "ON" if self.blank_screen_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
             print(Fore.YELLOW + "General:" + Style.RESET_ALL)
-            print(Fore.YELLOW + "10. Quit" + Style.RESET_ALL)
+            print(Fore.LIGHTYELLOW_EX + "10. Quit" + Style.RESET_ALL)
             print(Fore.CYAN + "==========================" + Style.RESET_ALL)
             choice = input("Enter your choice: ")
 
@@ -310,8 +310,8 @@ class ViLMA:
                     self.dummy_mode = not self.dummy_mode
                     print(Fore.GREEN + "Dummy mode is now {}".format("ON" if self.dummy_mode else "OFF") + Style.RESET_ALL)
                 elif choice == "9":
-                    self.full_output_mode = not self.full_output_mode
-                    print(Fore.GREEN + "Full output mode is now {}".format("ON" if self.full_output_mode else "OFF") + Style.RESET_ALL)
+                    self.blank_screen_on_trigger = not self.blank_screen_on_trigger
+                    print(Fore.GREEN + "Blank Screen on Trigger is now {}".format("ON" if self.blank_screen_on_trigger else "OFF") + Style.RESET_ALL)
                 elif choice == "10":
                     print(Fore.CYAN + "Quitting..." + Style.RESET_ALL)
                     break
