@@ -1,0 +1,9 @@
+torch
+transformers
+Pillow
+numpy
+mss
+opencv-python
+colorama
+tk
+flash-attn

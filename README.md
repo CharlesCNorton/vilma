@@ -81,15 +81,11 @@ ViLMA is an ongoing project, with future updates planned to enhance its capabili
 
 ## License
 
-ViLMA is licensed under the MIT License. For more details, see the [LICENSE](./LICENSE) file.
+ViLMA is licensed under the MIT License.
 
 ## Contributing
 
-We welcome contributions from the community! Please refer to the [CONTRIBUTING](./CONTRIBUTING.md) file for guidelines on how to contribute to the project.
-
-## Contact
-
-For support or inquiries, please contact [Your Name] at [your.email@example.com].
+We welcome contributions from the community! Fork, Pull and Share!
 
 ---
 
