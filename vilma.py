@@ -158,6 +158,7 @@ class ViLMA:
             cleaned_text = generated_text.replace("</s><s>", "").strip()
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+            result = False
             if "yes" in generated_text.lower() or "no" in generated_text.lower():
                 result = "yes" in generated_text.lower()
                 print(f"{timestamp} - Prompt: {prompt} - Inference result: {'Yes' if result else 'No'} - " + Fore.YELLOW + f"{cleaned_text}" + Style.RESET_ALL)
