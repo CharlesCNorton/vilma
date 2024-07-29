@@ -36,6 +36,7 @@ class ViLMA:
         record_on_trigger (bool): Flag to check if recording should start on 'YES' inference.
         custom_trigger_path (str): Path of the file to open on 'YES' inference.
         custom_trigger_enabled (bool): Flag to check if custom trigger is enabled.
+        custom_trigger_output (str): The output that triggers the custom action.
         recording (bool): Flag to check if recording is currently active.
         inference_rate (int or None): The number of inferences per second. Default is None.
         resolution (str): The current resolution setting for image processing.
@@ -57,6 +58,7 @@ class ViLMA:
         self.record_on_trigger = False
         self.custom_trigger_path = None
         self.custom_trigger_enabled = False
+        self.custom_trigger_output = "yes"
         self.recording = False
         self.inference_rate = None
         self.resolution = "720p"
@@ -158,24 +160,17 @@ class ViLMA:
             cleaned_text = generated_text.replace("</s><s>", "").strip()
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-            result = False
-            if "yes" in generated_text.lower() or "no" in generated_text.lower():
-                result = "yes" in generated_text.lower()
-                print(f"{timestamp} - Prompt: {prompt} - Inference result: {'Yes' if result else 'No'} - " + Fore.YELLOW + f"{cleaned_text}" + Style.RESET_ALL)
-            else:
-                print(f"{timestamp} - Prompt: {prompt} - Inference result: " + Fore.YELLOW + f"{cleaned_text}" + Style.RESET_ALL)
+            print(f"{timestamp} - Raw Inference result: {generated_text}")
+            print(f"{timestamp} - Cleaned Inference result: {cleaned_text}")
 
-            if result:
-                if self.screenshot_on_trigger:
-                    self.take_screenshot()
-                if self.record_on_trigger and not self.recording:
-                    self.start_recording()
-                if self.custom_trigger_enabled and self.custom_trigger_path:
+            if self.custom_trigger_enabled and self.custom_trigger_path:
+                print(f"{timestamp} - Checking custom trigger: '{self.custom_trigger_output.lower()}' in '{cleaned_text.lower()}'")
+                if self.custom_trigger_output.lower() in cleaned_text.lower():
+                    print(f"{timestamp} - Custom trigger matched. Running custom trigger.")
                     self.run_custom_trigger()
                     self.custom_trigger_enabled = False
-            else:
-                if self.recording:
-                    self.stop_recording()
+                else:
+                    print(f"{timestamp} - Custom trigger did not match.")
 
             return cleaned_text
         except Exception as e:
@@ -257,15 +252,17 @@ class ViLMA:
         Runs the custom trigger command.
         """
         try:
-            print(Fore.GREEN + f"Running custom trigger: {self.custom_trigger_path}" + Style.RESET_ALL)
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"{timestamp} - Running custom trigger: {self.custom_trigger_path}")
             if platform.system() == "Windows":
                 os.startfile(self.custom_trigger_path)
             elif platform.system() == "Darwin":
                 subprocess.run(["open", self.custom_trigger_path], check=True)
             else:
                 subprocess.run(["xdg-open", self.custom_trigger_path], check=True)
+            print(f"{timestamp} - Custom trigger executed successfully.")
         except Exception as e:
-            print(Fore.RED + f"Error running custom trigger: {e}" + Style.RESET_ALL)
+            print(f"{timestamp} - Error running custom trigger: {e}")
 
     def show_blank_window(self):
         """
@@ -475,13 +472,16 @@ class ViLMA:
                     if not self.custom_trigger_enabled:
                         self.custom_trigger_path = filedialog.askopenfilename(title="Select File to Open on Trigger")
                         if self.custom_trigger_path:
+                            self.custom_trigger_output = input("Enter the output that triggers the custom action (e.g., 'yes', 'no', 'open file', etc.): ")
+                            print(f"Setting custom_trigger_output to: {self.custom_trigger_output}")
                             self.custom_trigger_enabled = True
-                            print(Fore.GREEN + f"Custom Trigger set to open: {self.custom_trigger_path}" + Style.RESET_ALL)
+                            print(Fore.GREEN + f"Custom Trigger set to open {self.custom_trigger_path} on output: {self.custom_trigger_output}" + Style.RESET_ALL)
                         else:
                             print(Fore.RED + "Custom Trigger path selection cancelled." + Style.RESET_ALL)
                     else:
                         self.custom_trigger_enabled = False
                         self.custom_trigger_path = None
+                        self.custom_trigger_output = "yes"
                         print(Fore.GREEN + "Custom Trigger is now OFF" + Style.RESET_ALL)
                 elif choice == "14":
                     print(Fore.CYAN + "Quitting..." + Style.RESET_ALL)
