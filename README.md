@@ -43,26 +43,20 @@ ViLMA stands out in the market for several reasons:
 ### Prerequisites
 
 - **OS**: Ubuntu 22.04 or Windows 11
-- **Hardware**: Intel Core i7, 8 GB VRAM, 16 GB RAM, USB camera or RTSP URL
+- **Hardware**: Intel Core i7, 8 GB VRAM, 16 GB RAM
 - **Software**: Python 3.10, CUDA 12.1
 
 ### Steps to Install
 
 1. **Clone the Repository**:
-   \`\`\`bash
    git clone https://github.com/yourusername/vilma.git
    cd vilma
-   \`\`\`
 
 2. **Install Dependencies**:
-   \`\`\`bash
    pip install -r requirements.txt
-   \`\`\`
 
 3. **Run ViLMA**:
-   \`\`\`bash
    python vilma.py
-   \`\`\`
 
 ## Usage
 
