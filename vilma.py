@@ -33,6 +33,7 @@ class ViLMA:
         dummy_mode (bool): Flag to check if the system is in dummy mode.
         blank_screen_on_trigger (bool): Flag to check if the blank screen should be shown on 'YES' inference.
         inference_rate (int or None): The number of inferences per second. Default is None.
+        resolution (str): The current resolution setting for image processing.
     """
 
     def __init__(self):
@@ -48,6 +49,7 @@ class ViLMA:
         self.dummy_mode = False
         self.blank_screen_on_trigger = False
         self.inference_rate = None
+        self.resolution = "720p"
 
         atexit.register(self.ensure_blank_window_closed)
 
@@ -243,7 +245,8 @@ class ViLMA:
                 screen = self.capture_desktop()
                 screen_rgb = screen.convert("RGB")
                 screen_np = np.array(screen_rgb)
-                screen_resized = cv2.resize(screen_np, (640, 360))
+                width, height = self.get_resolution_dimensions()
+                screen_resized = cv2.resize(screen_np, (width, height))
                 pil_image = Image.fromarray(screen_resized)
 
                 for prompt in self.prompts:
@@ -272,6 +275,36 @@ class ViLMA:
             print(f"{timestamp} - Error during monitoring: {e}")
             self.ensure_blank_window_closed()
 
+    def get_resolution_dimensions(self):
+        """
+        Returns the dimensions based on the selected resolution.
+
+        Returns:
+            tuple: Width and height for the image processing resolution.
+        """
+        if self.resolution == "640p":
+            return 640, 360
+        elif self.resolution == "720p":
+            return 1280, 720
+        elif self.resolution == "1080p":
+            return 1920, 1080
+        elif self.resolution == "native":
+            with mss.mss() as sct:
+                monitor = sct.monitors[1]
+                return monitor["width"], monitor["height"]
+        else:
+            return 1280, 720
+
+    def toggle_resolution(self):
+        """
+        Toggles the resolution for image processing.
+        """
+        resolutions = ["640p", "720p", "1080p", "native"]
+        current_index = resolutions.index(self.resolution)
+        new_index = (current_index + 1) % len(resolutions)
+        self.resolution = resolutions[new_index]
+        print(Fore.GREEN + f"Resolution set to {self.resolution}." + Style.RESET_ALL)
+
     def terminal_menu(self):
         """
         Displays the terminal menu for user interaction.
@@ -290,14 +323,15 @@ class ViLMA:
             print(Fore.LIGHTBLUE_EX + "4. Remove Inference Prompt" + Style.RESET_ALL)
             print(Fore.LIGHTBLUE_EX + "5. List Inference Prompts" + Style.RESET_ALL)
             print(Fore.LIGHTBLUE_EX + "6. Set Inference Rate (current: " + (Fore.GREEN + str(self.inference_rate) if self.inference_rate else Fore.RED + "None") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.LIGHTBLUE_EX + "7. Toggle Processing Resolution (current: " + Fore.GREEN + self.resolution + Style.RESET_ALL + ")" + Style.RESET_ALL)
 
             print(Fore.GREEN + "\nMonitoring Control:" + Style.RESET_ALL)
-            print(Fore.LIGHTGREEN_EX + "7. Toggle Logout on Trigger (current: " + (Fore.GREEN + "ON" if self.logout_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
-            print(Fore.LIGHTGREEN_EX + "8. Toggle Dummy Mode (current: " + (Fore.GREEN + "ON" if self.dummy_mode else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
-            print(Fore.LIGHTGREEN_EX + "9. Toggle Blank Screen on Trigger (current: " + (Fore.GREEN + "ON" if self.blank_screen_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.LIGHTGREEN_EX + "8. Toggle Logout on Trigger (current: " + (Fore.GREEN + "ON" if self.logout_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.LIGHTGREEN_EX + "9. Toggle Dummy Mode (current: " + (Fore.GREEN + "ON" if self.dummy_mode else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.LIGHTGREEN_EX + "10. Toggle Blank Screen on Trigger (current: " + (Fore.GREEN + "ON" if self.blank_screen_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
 
             print(Fore.YELLOW + "\nGeneral:" + Style.RESET_ALL)
-            print(Fore.LIGHTYELLOW_EX + "10. Quit" + Style.RESET_ALL)
+            print(Fore.LIGHTYELLOW_EX + "11. Quit" + Style.RESET_ALL)
 
             print(Fore.CYAN + "\n==========================" + Style.RESET_ALL)
             choice = input("Enter your choice: ")
@@ -325,15 +359,17 @@ class ViLMA:
                 elif choice == "6":
                     self.set_inference_rate()
                 elif choice == "7":
+                    self.toggle_resolution()
+                elif choice == "8":
                     self.logout_on_trigger = not self.logout_on_trigger
                     print(Fore.GREEN + "Logout on Trigger is now {}".format("ON" if self.logout_on_trigger else "OFF") + Style.RESET_ALL)
-                elif choice == "8":
+                elif choice == "9":
                     self.dummy_mode = not self.dummy_mode
                     print(Fore.GREEN + "Dummy mode is now {}".format("ON" if self.dummy_mode else "OFF") + Style.RESET_ALL)
-                elif choice == "9":
+                elif choice == "10":
                     self.blank_screen_on_trigger = not self.blank_screen_on_trigger
                     print(Fore.GREEN + "Blank Screen on Trigger is now {}".format("ON" if self.blank_screen_on_trigger else "OFF") + Style.RESET_ALL)
-                elif choice == "10":
+                elif choice == "11":
                     print(Fore.CYAN + "Quitting..." + Style.RESET_ALL)
                     break
                 else:
