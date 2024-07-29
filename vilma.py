@@ -14,6 +14,7 @@ from tkinter import filedialog
 import platform
 import subprocess
 from colorama import init, Fore, Style
+import ctypes
 
 init()
 
@@ -119,7 +120,7 @@ class ViLMA:
             str: The generated text from the model.
         """
         try:
-            generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
+            generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
             return generated_text
         except Exception as e:
             raise RuntimeError(f"Error processing outputs: {e}")
@@ -133,7 +134,7 @@ class ViLMA:
             prompt (str): The prompt for binary inference.
 
         Returns:
-            bool: The result of the inference (True for 'yes', False for 'no').
+            str: The result of the inference.
         """
         try:
             task_prompt = prompt
@@ -141,14 +142,19 @@ class ViLMA:
             generated_ids = self.run_model(inputs)
             generated_text = self.process_outputs(generated_ids)
 
-            result = "yes" in generated_text.lower()
-
+            cleaned_text = generated_text.replace("</s><s>", "").strip()
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"{timestamp} - Prompt: {prompt} - Inference result: {'Yes' if result else 'No'} - {generated_text}")
-            return result
+
+            if "yes" in generated_text.lower() or "no" in generated_text.lower():
+                result = "yes" in generated_text.lower()
+                print(f"{timestamp} - Prompt: {prompt} - Inference result: {'Yes' if result else 'No'} - " + Fore.YELLOW + f"{cleaned_text}" + Style.RESET_ALL)
+            else:
+                print(f"{timestamp} - Prompt: {prompt} - Inference result: " + Fore.YELLOW + f"{cleaned_text}" + Style.RESET_ALL)
+
+            return cleaned_text
         except Exception as e:
             print(f"Error during inference: {e}")
-            return False
+            return "Error"
 
     def capture_desktop(self):
         """
@@ -176,7 +182,12 @@ class ViLMA:
             blank_screen = np.zeros((1080, 1920, 3), dtype=np.uint8)
             cv2.namedWindow("Blank Screen", cv2.WND_PROP_FULLSCREEN)
             cv2.setWindowProperty("Blank Screen", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-            cv2.setWindowProperty("Blank Screen", cv2.WND_PROP_TOPMOST, 1)
+
+            if platform.system() == "Windows":
+                hwnd = ctypes.windll.user32.FindWindowW(None, "Blank Screen")
+                if hwnd:
+                    ctypes.windll.user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002)
+
             while self.blank_window_open:
                 cv2.imshow("Blank Screen", blank_screen)
                 key = cv2.waitKey(1)
@@ -205,10 +216,8 @@ class ViLMA:
         try:
             system_platform = platform.system()
             if system_platform == "Windows":
-
                 subprocess.run(["shutdown", "/l"], check=True)
             elif system_platform == "Linux" or system_platform == "Darwin":
-
                 subprocess.run(["pkill", "-KILL", "-u", os.getlogin()], check=True)
             else:
                 print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Unsupported operating system: {system_platform}")
@@ -220,6 +229,14 @@ class ViLMA:
         """
         Starts monitoring the desktop screen based on the configured prompts.
         """
+        if self.model is None:
+            print(Fore.RED + "Error: No model loaded. Please load a model before starting monitoring." + Style.RESET_ALL)
+            return
+
+        if not self.prompts:
+            print(Fore.RED + "Error: No inference prompts set. Please add at least one inference prompt before starting monitoring." + Style.RESET_ALL)
+            return
+
         try:
             while True:
                 start_time = time.time()
@@ -229,10 +246,9 @@ class ViLMA:
                 screen_resized = cv2.resize(screen_np, (640, 360))
                 pil_image = Image.fromarray(screen_resized)
 
-                if any(self.run_inference(pil_image, prompt) for prompt in self.prompts):
-                    if self.dummy_mode:
-                        print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Trigger detected, but dummy mode is ON")
-                    else:
+                for prompt in self.prompts:
+                    result = self.run_inference(pil_image, prompt)
+                    if result.lower() == "yes" and not self.dummy_mode:
                         if self.logout_on_trigger:
                             print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Trigger detected, logging out")
                             self.logout()
@@ -240,8 +256,7 @@ class ViLMA:
                         if self.blank_screen_on_trigger and not self.blank_window_open:
                             print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Trigger detected, opening blank window")
                             self.show_blank_window()
-                else:
-                    if self.blank_window_open:
+                    elif result.lower() == "no" and self.blank_window_open:
                         print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - No trigger detected, closing blank window")
                         self.ensure_blank_window_closed()
 
@@ -264,31 +279,40 @@ class ViLMA:
         print(Fore.CYAN + "\n=== Welcome to ViLMA (Vision-Language Model-based Active Monitoring) ===" + Style.RESET_ALL)
         while True:
             print(Fore.CYAN + "\n=== Menu ===" + Style.RESET_ALL)
-            print(Fore.MAGENTA + "Model Operations:" + Style.RESET_ALL)
-            print(Fore.LIGHTMAGENTA_EX + "1. Load Florence-2" + Style.RESET_ALL)
-            print(Fore.BLUE + "Monitoring Settings:" + Style.RESET_ALL)
-            print(Fore.LIGHTBLUE_EX + "2. Add Inference Prompt" + Style.RESET_ALL)
-            print(Fore.LIGHTBLUE_EX + "3. Remove Inference Prompt" + Style.RESET_ALL)
-            print(Fore.LIGHTBLUE_EX + "4. List Inference Prompts" + Style.RESET_ALL)
-            print(Fore.LIGHTBLUE_EX + "5. Set Inference Rate (current: " + (Fore.GREEN + str(self.inference_rate) if self.inference_rate else Fore.RED + "None") + Style.RESET_ALL + ")" + Style.RESET_ALL)
-            print(Fore.GREEN + "Monitoring Control:" + Style.RESET_ALL)
-            print(Fore.LIGHTGREEN_EX + "6. Start Screen Monitoring" + Style.RESET_ALL)
+
+            print(Fore.LIGHTGREEN_EX + "1. Start Screen Monitoring" + Style.RESET_ALL)
+
+            print(Fore.MAGENTA + "\nModel Operations:" + Style.RESET_ALL)
+            print(Fore.LIGHTMAGENTA_EX + "2. Load Florence-2" + Style.RESET_ALL)
+
+            print(Fore.BLUE + "\nMonitoring Settings:" + Style.RESET_ALL)
+            print(Fore.LIGHTBLUE_EX + "3. Add Inference Prompt" + Style.RESET_ALL)
+            print(Fore.LIGHTBLUE_EX + "4. Remove Inference Prompt" + Style.RESET_ALL)
+            print(Fore.LIGHTBLUE_EX + "5. List Inference Prompts" + Style.RESET_ALL)
+            print(Fore.LIGHTBLUE_EX + "6. Set Inference Rate (current: " + (Fore.GREEN + str(self.inference_rate) if self.inference_rate else Fore.RED + "None") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+
+            print(Fore.GREEN + "\nMonitoring Control:" + Style.RESET_ALL)
             print(Fore.LIGHTGREEN_EX + "7. Toggle Logout on Trigger (current: " + (Fore.GREEN + "ON" if self.logout_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
             print(Fore.LIGHTGREEN_EX + "8. Toggle Dummy Mode (current: " + (Fore.GREEN + "ON" if self.dummy_mode else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
             print(Fore.LIGHTGREEN_EX + "9. Toggle Blank Screen on Trigger (current: " + (Fore.GREEN + "ON" if self.blank_screen_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
-            print(Fore.YELLOW + "General:" + Style.RESET_ALL)
+
+            print(Fore.YELLOW + "\nGeneral:" + Style.RESET_ALL)
             print(Fore.LIGHTYELLOW_EX + "10. Quit" + Style.RESET_ALL)
-            print(Fore.CYAN + "==========================" + Style.RESET_ALL)
+
+            print(Fore.CYAN + "\n==========================" + Style.RESET_ALL)
             choice = input("Enter your choice: ")
 
             try:
                 if choice == "1":
-                    self.load_model_menu()
+                    print(Fore.CYAN + "Starting screen monitoring..." + Style.RESET_ALL)
+                    self.start_monitoring()
                 elif choice == "2":
+                    self.load_model_menu()
+                elif choice == "3":
                     prompt = input("Enter the inference prompt to add: ")
                     self.prompts.append(prompt)
                     print(Fore.GREEN + f"Added inference prompt: {prompt}" + Style.RESET_ALL)
-                elif choice == "3":
+                elif choice == "4":
                     self.list_prompts()
                     index = int(input("Enter the prompt number to remove: ")) - 1
                     if 0 <= index < len(self.prompts):
@@ -296,13 +320,10 @@ class ViLMA:
                         print(Fore.GREEN + f"Removed inference prompt: {removed_prompt}" + Style.RESET_ALL)
                     else:
                         print(Fore.RED + "Invalid prompt number." + Style.RESET_ALL)
-                elif choice == "4":
-                    self.list_prompts()
                 elif choice == "5":
-                    self.set_inference_rate()
+                    self.list_prompts()
                 elif choice == "6":
-                    print(Fore.CYAN + "Starting screen monitoring..." + Style.RESET_ALL)
-                    self.start_monitoring()
+                    self.set_inference_rate()
                 elif choice == "7":
                     self.logout_on_trigger = not self.logout_on_trigger
                     print(Fore.GREEN + "Logout on Trigger is now {}".format("ON" if self.logout_on_trigger else "OFF") + Style.RESET_ALL)
