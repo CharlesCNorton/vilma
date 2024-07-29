@@ -34,6 +34,8 @@ class ViLMA:
         blank_screen_on_trigger (bool): Flag to check if the blank screen should be shown on 'YES' inference.
         screenshot_on_trigger (bool): Flag to check if a screenshot should be taken on 'YES' inference.
         record_on_trigger (bool): Flag to check if recording should start on 'YES' inference.
+        custom_trigger_path (str): Path of the file to open on 'YES' inference.
+        custom_trigger_enabled (bool): Flag to check if custom trigger is enabled.
         recording (bool): Flag to check if recording is currently active.
         inference_rate (int or None): The number of inferences per second. Default is None.
         resolution (str): The current resolution setting for image processing.
@@ -53,6 +55,8 @@ class ViLMA:
         self.blank_screen_on_trigger = False
         self.screenshot_on_trigger = False
         self.record_on_trigger = False
+        self.custom_trigger_path = None
+        self.custom_trigger_enabled = False
         self.recording = False
         self.inference_rate = None
         self.resolution = "720p"
@@ -165,6 +169,9 @@ class ViLMA:
                     self.take_screenshot()
                 if self.record_on_trigger and not self.recording:
                     self.start_recording()
+                if self.custom_trigger_enabled and self.custom_trigger_path:
+                    self.run_custom_trigger()
+                    self.custom_trigger_enabled = False
             else:
                 if self.recording:
                     self.stop_recording()
@@ -243,6 +250,21 @@ class ViLMA:
             print(Fore.GREEN + "Recording stopped." + Style.RESET_ALL)
         except Exception as e:
             print(Fore.RED + f"Error stopping recording: {e}" + Style.RESET_ALL)
+
+    def run_custom_trigger(self):
+        """
+        Runs the custom trigger command.
+        """
+        try:
+            print(Fore.GREEN + f"Running custom trigger: {self.custom_trigger_path}" + Style.RESET_ALL)
+            if platform.system() == "Windows":
+                os.startfile(self.custom_trigger_path)
+            elif platform.system() == "Darwin":
+                subprocess.run(["open", self.custom_trigger_path], check=True)
+            else:
+                subprocess.run(["xdg-open", self.custom_trigger_path], check=True)
+        except Exception as e:
+            print(Fore.RED + f"Error running custom trigger: {e}" + Style.RESET_ALL)
 
     def show_blank_window(self):
         """
@@ -395,15 +417,16 @@ class ViLMA:
             print(Fore.LIGHTBLUE_EX + "6. Set Inference Rate (current: " + (Fore.GREEN + str(self.inference_rate) if self.inference_rate else Fore.RED + "None") + Style.RESET_ALL + ")" + Style.RESET_ALL)
             print(Fore.LIGHTBLUE_EX + "7. Toggle Processing Resolution (current: " + Fore.GREEN + self.resolution + Style.RESET_ALL + ")" + Style.RESET_ALL)
 
-            print(Fore.GREEN + "\nTrigger Toggles:" + Style.RESET_ALL)
+            print(Fore.GREEN + "\nMonitoring Control:" + Style.RESET_ALL)
             print(Fore.LIGHTGREEN_EX + "8. Toggle Logout on Trigger (current: " + (Fore.GREEN + "ON" if self.logout_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
             print(Fore.LIGHTGREEN_EX + "9. Toggle Dummy Mode (current: " + (Fore.GREEN + "ON" if self.dummy_mode else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
             print(Fore.LIGHTGREEN_EX + "10. Toggle Blank Screen on Trigger (current: " + (Fore.GREEN + "ON" if self.blank_screen_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
             print(Fore.LIGHTGREEN_EX + "11. Toggle Screenshot on Trigger (current: " + (Fore.GREEN + "ON" if self.screenshot_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
             print(Fore.LIGHTGREEN_EX + "12. Toggle Record on Trigger (current: " + (Fore.GREEN + "ON" if self.record_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.LIGHTGREEN_EX + "13. Toggle Custom Trigger (current: " + (Fore.GREEN + "ON" if self.custom_trigger_enabled else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
 
             print(Fore.YELLOW + "\nGeneral:" + Style.RESET_ALL)
-            print(Fore.LIGHTYELLOW_EX + "13. Quit" + Style.RESET_ALL)
+            print(Fore.LIGHTYELLOW_EX + "14. Quit" + Style.RESET_ALL)
 
             print(Fore.CYAN + "\n==========================" + Style.RESET_ALL)
             choice = input("Enter your choice: ")
@@ -448,6 +471,18 @@ class ViLMA:
                     self.record_on_trigger = not self.record_on_trigger
                     print(Fore.GREEN + "Record on Trigger is now {}".format("ON" if self.record_on_trigger else "OFF") + Style.RESET_ALL)
                 elif choice == "13":
+                    if not self.custom_trigger_enabled:
+                        self.custom_trigger_path = filedialog.askopenfilename(title="Select File to Open on Trigger")
+                        if self.custom_trigger_path:
+                            self.custom_trigger_enabled = True
+                            print(Fore.GREEN + f"Custom Trigger set to open: {self.custom_trigger_path}" + Style.RESET_ALL)
+                        else:
+                            print(Fore.RED + "Custom Trigger path selection cancelled." + Style.RESET_ALL)
+                    else:
+                        self.custom_trigger_enabled = False
+                        self.custom_trigger_path = None
+                        print(Fore.GREEN + "Custom Trigger is now OFF" + Style.RESET_ALL)
+                elif choice == "14":
                     print(Fore.CYAN + "Quitting..." + Style.RESET_ALL)
                     break
                 else:
