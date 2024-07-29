@@ -32,6 +32,9 @@ class ViLMA:
         logout_on_trigger (bool): Flag to check if the system should log out on 'YES' inference.
         dummy_mode (bool): Flag to check if the system is in dummy mode.
         blank_screen_on_trigger (bool): Flag to check if the blank screen should be shown on 'YES' inference.
+        screenshot_on_trigger (bool): Flag to check if a screenshot should be taken on 'YES' inference.
+        record_on_trigger (bool): Flag to check if recording should start on 'YES' inference.
+        recording (bool): Flag to check if recording is currently active.
         inference_rate (int or None): The number of inferences per second. Default is None.
         resolution (str): The current resolution setting for image processing.
     """
@@ -48,8 +51,12 @@ class ViLMA:
         self.logout_on_trigger = False
         self.dummy_mode = False
         self.blank_screen_on_trigger = False
+        self.screenshot_on_trigger = False
+        self.record_on_trigger = False
+        self.recording = False
         self.inference_rate = None
         self.resolution = "720p"
+        self.video_writer = None
 
         atexit.register(self.ensure_blank_window_closed)
 
@@ -153,6 +160,15 @@ class ViLMA:
             else:
                 print(f"{timestamp} - Prompt: {prompt} - Inference result: " + Fore.YELLOW + f"{cleaned_text}" + Style.RESET_ALL)
 
+            if result:
+                if self.screenshot_on_trigger:
+                    self.take_screenshot()
+                if self.record_on_trigger and not self.recording:
+                    self.start_recording()
+            else:
+                if self.recording:
+                    self.stop_recording()
+
             return cleaned_text
         except Exception as e:
             print(f"Error during inference: {e}")
@@ -173,6 +189,60 @@ class ViLMA:
             return img
         except Exception as e:
             raise RuntimeError(f"Error capturing desktop: {e}")
+
+    def take_screenshot(self):
+        """
+        Takes a screenshot of the current desktop.
+        """
+        try:
+            screenshot = self.capture_desktop()
+            screenshot.save(f"screenshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+            print(Fore.GREEN + "Screenshot taken." + Style.RESET_ALL)
+        except Exception as e:
+            print(Fore.RED + f"Error taking screenshot: {e}" + Style.RESET_ALL)
+
+    def start_recording(self):
+        """
+        Starts recording the desktop.
+        """
+        try:
+            print(Fore.GREEN + "Recording started." + Style.RESET_ALL)
+            self.recording = True
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            width, height = self.get_resolution_dimensions()
+            self.video_writer = cv2.VideoWriter(f'recording_{datetime.now().strftime("%Y%m%d_%H%M%S")}.mp4', fourcc, 20.0, (width, height))
+
+            threading.Thread(target=self.record_desktop).start()
+        except Exception as e:
+            print(Fore.RED + f"Error starting recording: {e}" + Style.RESET_ALL)
+
+    def record_desktop(self):
+        """
+        Records the desktop screen.
+        """
+        try:
+            with mss.mss() as sct:
+                monitor = sct.monitors[1]
+                while self.recording:
+                    screenshot = sct.grab(monitor)
+                    frame = np.array(screenshot)
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+                    self.video_writer.write(frame)
+                    time.sleep(1/20)
+        except Exception as e:
+            print(Fore.RED + f"Error recording desktop: {e}" + Style.RESET_ALL)
+
+    def stop_recording(self):
+        """
+        Stops recording the desktop.
+        """
+        try:
+            self.recording = False
+            self.video_writer.release()
+            self.video_writer = None
+            print(Fore.GREEN + "Recording stopped." + Style.RESET_ALL)
+        except Exception as e:
+            print(Fore.RED + f"Error stopping recording: {e}" + Style.RESET_ALL)
 
     def show_blank_window(self):
         """
@@ -325,13 +395,15 @@ class ViLMA:
             print(Fore.LIGHTBLUE_EX + "6. Set Inference Rate (current: " + (Fore.GREEN + str(self.inference_rate) if self.inference_rate else Fore.RED + "None") + Style.RESET_ALL + ")" + Style.RESET_ALL)
             print(Fore.LIGHTBLUE_EX + "7. Toggle Processing Resolution (current: " + Fore.GREEN + self.resolution + Style.RESET_ALL + ")" + Style.RESET_ALL)
 
-            print(Fore.GREEN + "\nMonitoring Control:" + Style.RESET_ALL)
+            print(Fore.GREEN + "\nTrigger Toggles:" + Style.RESET_ALL)
             print(Fore.LIGHTGREEN_EX + "8. Toggle Logout on Trigger (current: " + (Fore.GREEN + "ON" if self.logout_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
             print(Fore.LIGHTGREEN_EX + "9. Toggle Dummy Mode (current: " + (Fore.GREEN + "ON" if self.dummy_mode else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
             print(Fore.LIGHTGREEN_EX + "10. Toggle Blank Screen on Trigger (current: " + (Fore.GREEN + "ON" if self.blank_screen_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.LIGHTGREEN_EX + "11. Toggle Screenshot on Trigger (current: " + (Fore.GREEN + "ON" if self.screenshot_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.LIGHTGREEN_EX + "12. Toggle Record on Trigger (current: " + (Fore.GREEN + "ON" if self.record_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
 
             print(Fore.YELLOW + "\nGeneral:" + Style.RESET_ALL)
-            print(Fore.LIGHTYELLOW_EX + "11. Quit" + Style.RESET_ALL)
+            print(Fore.LIGHTYELLOW_EX + "13. Quit" + Style.RESET_ALL)
 
             print(Fore.CYAN + "\n==========================" + Style.RESET_ALL)
             choice = input("Enter your choice: ")
@@ -370,6 +442,12 @@ class ViLMA:
                     self.blank_screen_on_trigger = not self.blank_screen_on_trigger
                     print(Fore.GREEN + "Blank Screen on Trigger is now {}".format("ON" if self.blank_screen_on_trigger else "OFF") + Style.RESET_ALL)
                 elif choice == "11":
+                    self.screenshot_on_trigger = not self.screenshot_on_trigger
+                    print(Fore.GREEN + "Screenshot on Trigger is now {}".format("ON" if self.screenshot_on_trigger else "OFF") + Style.RESET_ALL)
+                elif choice == "12":
+                    self.record_on_trigger = not self.record_on_trigger
+                    print(Fore.GREEN + "Record on Trigger is now {}".format("ON" if self.record_on_trigger else "OFF") + Style.RESET_ALL)
+                elif choice == "13":
                     print(Fore.CYAN + "Quitting..." + Style.RESET_ALL)
                     break
                 else:
