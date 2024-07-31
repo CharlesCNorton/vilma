@@ -15,6 +15,7 @@ import platform
 import subprocess
 from colorama import init, Fore, Style
 import ctypes
+import pyautogui
 
 init()
 
@@ -22,24 +23,6 @@ class ViLMA:
     """
     A class to monitor the desktop screen and perform binary inference on the captured images
     using a pre-trained vision-language model.
-
-    Attributes:
-        device (torch.device): The device to run the model on (CPU or CUDA).
-        model (AutoModelForCausalLM): The pre-trained vision-language model.
-        processor (AutoProcessor): The processor for the pre-trained model.
-        prompts (list): List of prompts for binary inference.
-        blank_window_open (bool): Flag to check if the blank window is open.
-        logout_on_trigger (bool): Flag to check if the system should log out on 'YES' inference.
-        dummy_mode (bool): Flag to check if the system is in dummy mode.
-        blank_screen_on_trigger (bool): Flag to check if the blank screen should be shown on 'YES' inference.
-        screenshot_on_trigger (bool): Flag to check if a screenshot should be taken on 'YES' inference.
-        record_on_trigger (bool): Flag to check if recording should start on 'YES' inference.
-        custom_trigger_path (str): Path of the file to open on 'YES' inference.
-        custom_trigger_enabled (bool): Flag to check if custom trigger is enabled.
-        custom_trigger_output (str): The output that triggers the custom action.
-        recording (bool): Flag to check if recording is currently active.
-        inference_rate (int or None): The number of inferences per second. Default is None.
-        resolution (str): The current resolution setting for image processing.
     """
 
     def __init__(self):
@@ -63,15 +46,16 @@ class ViLMA:
         self.inference_rate = None
         self.resolution = "720p"
         self.video_writer = None
+        self.keyboard_trigger_enabled = False
+        self.keyboard_trigger_sequence = ""
+        self.keyboard_trigger_activated = False
+        self.keyboard_trigger_output = "yes"
 
         atexit.register(self.ensure_blank_window_closed)
 
     def load_model(self, model_path):
         """
         Loads the model and processor with the given model path.
-
-        Args:
-            model_path (str): The path to the pre-trained model.
         """
         try:
             self.model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True).eval().to(self.device).half()
@@ -83,13 +67,6 @@ class ViLMA:
     def prepare_inputs(self, task_prompt, image):
         """
         Prepares inputs for the model.
-
-        Args:
-            task_prompt (str): The task prompt for the model.
-            image (PIL.Image): The image to be processed.
-
-        Returns:
-            dict: The prepared inputs.
         """
         try:
             inputs = self.processor(text=task_prompt, images=image, return_tensors="pt").to(self.device)
@@ -103,12 +80,6 @@ class ViLMA:
     def run_model(self, inputs):
         """
         Runs the model on the prepared inputs.
-
-        Args:
-            inputs (dict): The prepared inputs.
-
-        Returns:
-            torch.Tensor: The generated IDs from the model.
         """
         try:
             with torch.amp.autocast("cuda"):
@@ -127,12 +98,6 @@ class ViLMA:
     def process_outputs(self, generated_ids):
         """
         Processes the outputs from the model.
-
-        Args:
-            generated_ids (torch.Tensor): The generated IDs from the model.
-
-        Returns:
-            str: The generated text from the model.
         """
         try:
             generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
@@ -143,13 +108,6 @@ class ViLMA:
     def run_inference(self, image, prompt):
         """
         Runs inference on the given image with the specified prompt.
-
-        Args:
-            image (PIL.Image): The image to be processed.
-            prompt (str): The prompt for binary inference.
-
-        Returns:
-            str: The result of the inference.
         """
         try:
             task_prompt = prompt
@@ -172,6 +130,14 @@ class ViLMA:
                 else:
                     print(f"{timestamp} - Custom trigger did not match.")
 
+            if self.keyboard_trigger_enabled and self.keyboard_trigger_output.lower() in cleaned_text.lower() and not self.keyboard_trigger_activated:
+                print(f"{timestamp} - Keyboard trigger matched. Running keyboard trigger.")
+                self.run_keyboard_trigger()
+                self.keyboard_trigger_activated = True
+
+            if self.keyboard_trigger_output.lower() not in cleaned_text.lower():
+                self.keyboard_trigger_activated = False
+
             return cleaned_text
         except Exception as e:
             print(f"Error during inference: {e}")
@@ -180,9 +146,6 @@ class ViLMA:
     def capture_desktop(self):
         """
         Captures the current desktop screen.
-
-        Returns:
-            PIL.Image: The captured desktop image.
         """
         try:
             with mss.mss() as sct:
@@ -263,6 +226,16 @@ class ViLMA:
             print(f"{timestamp} - Custom trigger executed successfully.")
         except Exception as e:
             print(f"{timestamp} - Error running custom trigger: {e}")
+
+    def run_keyboard_trigger(self):
+        """
+        Runs the keyboard trigger command.
+        """
+        try:
+            pyautogui.typewrite(self.keyboard_trigger_sequence)
+            print(Fore.GREEN + f"Executed keyboard sequence: {self.keyboard_trigger_sequence}" + Style.RESET_ALL)
+        except Exception as e:
+            print(Fore.RED + f"Error executing keyboard trigger: {e}" + Style.RESET_ALL)
 
     def show_blank_window(self):
         """
@@ -368,9 +341,6 @@ class ViLMA:
     def get_resolution_dimensions(self):
         """
         Returns the dimensions based on the selected resolution.
-
-        Returns:
-            tuple: Width and height for the image processing resolution.
         """
         if self.resolution == "640p":
             return 640, 360
@@ -422,9 +392,10 @@ class ViLMA:
             print(Fore.LIGHTGREEN_EX + "11. Toggle Screenshot on Trigger (current: " + (Fore.GREEN + "ON" if self.screenshot_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
             print(Fore.LIGHTGREEN_EX + "12. Toggle Record on Trigger (current: " + (Fore.GREEN + "ON" if self.record_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
             print(Fore.LIGHTGREEN_EX + "13. Toggle Custom Trigger (current: " + (Fore.GREEN + "ON" if self.custom_trigger_enabled else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.LIGHTGREEN_EX + "14. Toggle Keyboard Command on Trigger (current: " + (Fore.GREEN + "ON" if self.keyboard_trigger_enabled else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
 
             print(Fore.YELLOW + "\nGeneral:" + Style.RESET_ALL)
-            print(Fore.LIGHTYELLOW_EX + "14. Quit" + Style.RESET_ALL)
+            print(Fore.LIGHTYELLOW_EX + "15. Quit" + Style.RESET_ALL)
 
             print(Fore.CYAN + "\n==========================" + Style.RESET_ALL)
             choice = input("Enter your choice: ")
@@ -484,6 +455,18 @@ class ViLMA:
                         self.custom_trigger_output = "yes"
                         print(Fore.GREEN + "Custom Trigger is now OFF" + Style.RESET_ALL)
                 elif choice == "14":
+                    if not self.keyboard_trigger_enabled:
+                        self.keyboard_trigger_sequence = input("Enter the keyboard sequence to type on trigger: ")
+                        self.keyboard_trigger_output = input("Enter the output that triggers the keyboard action (e.g., 'yes', 'no', 'low health', etc.): ")
+                        self.keyboard_trigger_enabled = True
+                        self.keyboard_trigger_activated = False
+                        print(Fore.GREEN + f"Keyboard Trigger set to type: {self.keyboard_trigger_sequence} on output: {self.keyboard_trigger_output}" + Style.RESET_ALL)
+                    else:
+                        self.keyboard_trigger_enabled = False
+                        self.keyboard_trigger_sequence = ""
+                        self.keyboard_trigger_output = "yes"
+                        print(Fore.GREEN + "Keyboard Trigger is now OFF" + Style.RESET_ALL)
+                elif choice == "15":
                     print(Fore.CYAN + "Quitting..." + Style.RESET_ALL)
                     break
                 else:
