@@ -6,4 +6,5 @@ mss
 opencv-python
 colorama
 tk
+pyautogui
 flash-attn
