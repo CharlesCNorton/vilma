@@ -46,18 +46,6 @@ ViLMA stands out in the market for several reasons:
 - **Hardware**: Intel Core i7, 8 GB VRAM, 16 GB RAM
 - **Software**: Python 3.10, CUDA 12.1
 
-### Steps to Install
-
-1. **Clone the Repository**:
-   git clone https://github.com/yourusername/vilma.git
-   cd vilma
-
-2. **Install Dependencies**:
-   pip install -r requirements.txt
-
-3. **Run ViLMA**:
-   python vilma.py
-
 ## Usage
 
 ViLMA is designed to be user-friendly, with an interactive terminal menu for configuration and control:
