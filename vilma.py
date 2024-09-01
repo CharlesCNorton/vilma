@@ -21,7 +21,7 @@ init()
 
 class ViLMA:
     """
-    A class to monitor the desktop screen and perform binary inference on the captured images
+    A class to monitor the desktop screen or a specific window and perform binary inference on the captured images
     using a pre-trained vision-language model.
     """
 
@@ -50,12 +50,19 @@ class ViLMA:
         self.keyboard_trigger_sequence = ""
         self.keyboard_trigger_activated = False
         self.keyboard_trigger_output = "yes"
+        self.target_window = None
 
         atexit.register(self.ensure_blank_window_closed)
 
     def load_model(self, model_path):
         """
         Loads the model and processor with the given model path.
+
+        Args:
+            model_path (str): Path to the model directory.
+
+        Raises:
+            RuntimeError: If there's an error loading the model.
         """
         try:
             self.model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True).eval().to(self.device).half()
@@ -67,6 +74,16 @@ class ViLMA:
     def prepare_inputs(self, task_prompt, image):
         """
         Prepares inputs for the model.
+
+        Args:
+            task_prompt (str): The prompt for the model.
+            image (PIL.Image): The image to process.
+
+        Returns:
+            dict: Prepared inputs for the model.
+
+        Raises:
+            RuntimeError: If there's an error preparing the inputs.
         """
         try:
             inputs = self.processor(text=task_prompt, images=image, return_tensors="pt").to(self.device)
@@ -80,6 +97,15 @@ class ViLMA:
     def run_model(self, inputs):
         """
         Runs the model on the prepared inputs.
+
+        Args:
+            inputs (dict): Prepared inputs for the model.
+
+        Returns:
+            torch.Tensor: Generated ids from the model.
+
+        Raises:
+            RuntimeError: If there's an error running the model.
         """
         try:
             with torch.amp.autocast("cuda"):
@@ -98,6 +124,15 @@ class ViLMA:
     def process_outputs(self, generated_ids):
         """
         Processes the outputs from the model.
+
+        Args:
+            generated_ids (torch.Tensor): Generated ids from the model.
+
+        Returns:
+            str: Processed text output.
+
+        Raises:
+            RuntimeError: If there's an error processing the outputs.
         """
         try:
             generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
@@ -108,6 +143,13 @@ class ViLMA:
     def run_inference(self, image, prompt):
         """
         Runs inference on the given image with the specified prompt.
+
+        Args:
+            image (PIL.Image): The image to process.
+            prompt (str): The prompt for the model.
+
+        Returns:
+            str: The cleaned inference result.
         """
         try:
             task_prompt = prompt
@@ -145,11 +187,30 @@ class ViLMA:
 
     def capture_desktop(self):
         """
-        Captures the current desktop screen.
+        Captures the current desktop screen or the specified window.
+
+        Returns:
+            PIL.Image: The captured image.
+
+        Raises:
+            RuntimeError: If there's an error capturing the desktop or window.
         """
         try:
             with mss.mss() as sct:
-                monitor = sct.monitors[1]
+                if self.target_window:
+                    # Capture specific window
+                    window = pyautogui.getWindowsWithTitle(self.target_window)
+                    if window:
+                        window = window[0]
+                        left, top, width, height = window.left, window.top, window.width, window.height
+                        monitor = {"top": top, "left": left, "width": width, "height": height}
+                    else:
+                        print(Fore.YELLOW + f"Window '{self.target_window}' not found. Capturing full desktop." + Style.RESET_ALL)
+                        monitor = sct.monitors[1]
+                else:
+                    # Capture full desktop
+                    monitor = sct.monitors[1]
+
                 screenshot = sct.grab(monitor)
                 img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
             return img
@@ -158,7 +219,7 @@ class ViLMA:
 
     def take_screenshot(self):
         """
-        Takes a screenshot of the current desktop.
+        Takes a screenshot of the current desktop or specified window.
         """
         try:
             screenshot = self.capture_desktop()
@@ -169,7 +230,7 @@ class ViLMA:
 
     def start_recording(self):
         """
-        Starts recording the desktop.
+        Starts recording the desktop or specified window.
         """
         try:
             print(Fore.GREEN + "Recording started." + Style.RESET_ALL)
@@ -184,15 +245,14 @@ class ViLMA:
 
     def record_desktop(self):
         """
-        Records the desktop screen.
+        Records the desktop screen or specified window.
         """
         try:
             with mss.mss() as sct:
-                monitor = sct.monitors[1]
                 while self.recording:
-                    screenshot = sct.grab(monitor)
+                    screenshot = self.capture_desktop()
                     frame = np.array(screenshot)
-                    frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+                    frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
                     self.video_writer.write(frame)
                     time.sleep(1/20)
         except Exception as e:
@@ -200,7 +260,7 @@ class ViLMA:
 
     def stop_recording(self):
         """
-        Stops recording the desktop.
+        Stops recording the desktop or specified window.
         """
         try:
             self.recording = False
@@ -292,7 +352,7 @@ class ViLMA:
 
     def start_monitoring(self):
         """
-        Starts monitoring the desktop screen based on the configured prompts.
+        Starts monitoring the desktop screen or specified window based on the configured prompts.
         """
         if self.model is None:
             print(Fore.RED + "Error: No model loaded. Please load a model before starting monitoring." + Style.RESET_ALL)
@@ -340,8 +400,17 @@ class ViLMA:
 
     def get_resolution_dimensions(self):
         """
-        Returns the dimensions based on the selected resolution.
+        Returns the dimensions based on the selected resolution or target window.
+
+        Returns:
+            tuple: A tuple containing the width and height of the resolution.
         """
+        if self.target_window:
+            window = pyautogui.getWindowsWithTitle(self.target_window)
+            if window:
+                window = window[0]
+                return window.width, window.height
+
         if self.resolution == "640p":
             return 640, 360
         elif self.resolution == "720p":
@@ -365,6 +434,14 @@ class ViLMA:
         self.resolution = resolutions[new_index]
         print(Fore.GREEN + f"Resolution set to {self.resolution}." + Style.RESET_ALL)
 
+    def set_target_window(self):
+        """
+        Sets the target window for monitoring.
+        """
+        window_title = input("Enter the title of the window to monitor (leave blank for full desktop): ")
+        self.target_window = window_title if window_title else None
+        print(Fore.GREEN + f"Target window set to: {self.target_window or 'Full Desktop'}" + Style.RESET_ALL)
+
     def terminal_menu(self):
         """
         Displays the terminal menu for user interaction.
@@ -384,18 +461,19 @@ class ViLMA:
             print(Fore.LIGHTBLUE_EX + "5. List Inference Prompts" + Style.RESET_ALL)
             print(Fore.LIGHTBLUE_EX + "6. Set Inference Rate (current: " + (Fore.GREEN + str(self.inference_rate) if self.inference_rate else Fore.RED + "None") + Style.RESET_ALL + ")" + Style.RESET_ALL)
             print(Fore.LIGHTBLUE_EX + "7. Toggle Processing Resolution (current: " + Fore.GREEN + self.resolution + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.LIGHTBLUE_EX + "8. Set Target Window (current: " + (Fore.GREEN + self.target_window if self.target_window else Fore.RED + "Full Desktop") + Style.RESET_ALL + ")" + Style.RESET_ALL)
 
             print(Fore.GREEN + "\nMonitoring Control:" + Style.RESET_ALL)
-            print(Fore.LIGHTGREEN_EX + "8. Toggle Logout on Trigger (current: " + (Fore.GREEN + "ON" if self.logout_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
-            print(Fore.LIGHTGREEN_EX + "9. Toggle Dummy Mode (current: " + (Fore.GREEN + "ON" if self.dummy_mode else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
-            print(Fore.LIGHTGREEN_EX + "10. Toggle Blank Screen on Trigger (current: " + (Fore.GREEN + "ON" if self.blank_screen_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
-            print(Fore.LIGHTGREEN_EX + "11. Toggle Screenshot on Trigger (current: " + (Fore.GREEN + "ON" if self.screenshot_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
-            print(Fore.LIGHTGREEN_EX + "12. Toggle Record on Trigger (current: " + (Fore.GREEN + "ON" if self.record_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
-            print(Fore.LIGHTGREEN_EX + "13. Toggle Custom Trigger (current: " + (Fore.GREEN + "ON" if self.custom_trigger_enabled else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
-            print(Fore.LIGHTGREEN_EX + "14. Toggle Keyboard Command on Trigger (current: " + (Fore.GREEN + "ON" if self.keyboard_trigger_enabled else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.LIGHTGREEN_EX + "9. Toggle Logout on Trigger (current: " + (Fore.GREEN + "ON" if self.logout_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.LIGHTGREEN_EX + "10. Toggle Dummy Mode (current: " + (Fore.GREEN + "ON" if self.dummy_mode else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.LIGHTGREEN_EX + "11. Toggle Blank Screen on Trigger (current: " + (Fore.GREEN + "ON" if self.blank_screen_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.LIGHTGREEN_EX + "12. Toggle Screenshot on Trigger (current: " + (Fore.GREEN + "ON" if self.screenshot_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.LIGHTGREEN_EX + "13. Toggle Record on Trigger (current: " + (Fore.GREEN + "ON" if self.record_on_trigger else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.LIGHTGREEN_EX + "14. Toggle Custom Trigger (current: " + (Fore.GREEN + "ON" if self.custom_trigger_enabled else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
+            print(Fore.LIGHTGREEN_EX + "15. Toggle Keyboard Command on Trigger (current: " + (Fore.GREEN + "ON" if self.keyboard_trigger_enabled else Fore.RED + "OFF") + Style.RESET_ALL + ")" + Style.RESET_ALL)
 
             print(Fore.YELLOW + "\nGeneral:" + Style.RESET_ALL)
-            print(Fore.LIGHTYELLOW_EX + "15. Quit" + Style.RESET_ALL)
+            print(Fore.LIGHTYELLOW_EX + "16. Quit" + Style.RESET_ALL)
 
             print(Fore.CYAN + "\n==========================" + Style.RESET_ALL)
             choice = input("Enter your choice: ")
@@ -425,21 +503,23 @@ class ViLMA:
                 elif choice == "7":
                     self.toggle_resolution()
                 elif choice == "8":
+                    self.set_target_window()
+                elif choice == "9":
                     self.logout_on_trigger = not self.logout_on_trigger
                     print(Fore.GREEN + "Logout on Trigger is now {}".format("ON" if self.logout_on_trigger else "OFF") + Style.RESET_ALL)
-                elif choice == "9":
+                elif choice == "10":
                     self.dummy_mode = not self.dummy_mode
                     print(Fore.GREEN + "Dummy mode is now {}".format("ON" if self.dummy_mode else "OFF") + Style.RESET_ALL)
-                elif choice == "10":
+                elif choice == "11":
                     self.blank_screen_on_trigger = not self.blank_screen_on_trigger
                     print(Fore.GREEN + "Blank Screen on Trigger is now {}".format("ON" if self.blank_screen_on_trigger else "OFF") + Style.RESET_ALL)
-                elif choice == "11":
+                elif choice == "12":
                     self.screenshot_on_trigger = not self.screenshot_on_trigger
                     print(Fore.GREEN + "Screenshot on Trigger is now {}".format("ON" if self.screenshot_on_trigger else "OFF") + Style.RESET_ALL)
-                elif choice == "12":
+                elif choice == "13":
                     self.record_on_trigger = not self.record_on_trigger
                     print(Fore.GREEN + "Record on Trigger is now {}".format("ON" if self.record_on_trigger else "OFF") + Style.RESET_ALL)
-                elif choice == "13":
+                elif choice == "14":
                     if not self.custom_trigger_enabled:
                         self.custom_trigger_path = filedialog.askopenfilename(title="Select File to Open on Trigger")
                         if self.custom_trigger_path:
@@ -454,7 +534,7 @@ class ViLMA:
                         self.custom_trigger_path = None
                         self.custom_trigger_output = "yes"
                         print(Fore.GREEN + "Custom Trigger is now OFF" + Style.RESET_ALL)
-                elif choice == "14":
+                elif choice == "15":
                     if not self.keyboard_trigger_enabled:
                         self.keyboard_trigger_sequence = input("Enter the keyboard sequence to type on trigger: ")
                         self.keyboard_trigger_output = input("Enter the output that triggers the keyboard action (e.g., 'yes', 'no', 'low health', etc.): ")
@@ -466,7 +546,7 @@ class ViLMA:
                         self.keyboard_trigger_sequence = ""
                         self.keyboard_trigger_output = "yes"
                         print(Fore.GREEN + "Keyboard Trigger is now OFF" + Style.RESET_ALL)
-                elif choice == "15":
+                elif choice == "16":
                     print(Fore.CYAN + "Quitting..." + Style.RESET_ALL)
                     break
                 else:
