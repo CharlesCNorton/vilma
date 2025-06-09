@@ -1,5 +1,5 @@
 
-# ViLMA: Vision-Language Model-based Active Monitoring
+# ViLMA: Vision-Language Model Active Monitoring
 
 ViLMA (Vision-Language Model-based Active Monitoring) is an innovative AI-driven solution for real-time desktop monitoring. Utilizing the powerful Florence-2 vision-language model, ViLMA provides unparalleled capabilities in content monitoring, security, and productivity enhancement.
 
